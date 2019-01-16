@@ -1,0 +1,92 @@
+package com.issac.spring.web.servlet.controller;
+
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.DeferredResult;
+
+import java.util.Random;
+import java.util.concurrent.*;
+
+/**
+ * author:  ywy
+ * date:    2019-01-12
+ * desc:
+ */
+@RestController
+@EnableScheduling
+public class HelloWorldAsyncController {
+
+    private final BlockingQueue<DeferredResult<String>> queue = new ArrayBlockingQueue<>(5);
+
+    // 超时随机数
+    private final Random random = new Random();
+
+    @Scheduled(fixedRate = 5000)
+    public void process() throws InterruptedException { // 定时操作
+        DeferredResult<String> result = null;
+        do {
+            result = queue.take();
+            long timeout = random.nextInt(100);
+            // 模拟等待事件，RPC 或者 DB查询
+            Thread.sleep(timeout);
+            // 计算结果
+            result.setResult("Hello World");
+            println("执行计算结果，消耗：" + timeout + "ms");
+
+        } while (result != null);
+    }
+
+    @GetMapping("/hello-world")
+    public DeferredResult<String> helloWorld() {
+        DeferredResult<String> result = new DeferredResult<>(50L);
+//        result.setResult("Hello World");
+        //入队操作
+//        queue.offer(result);
+        println("hello world");
+
+        result.onCompletion(() -> { // finnally
+            println("执行结束");
+        });
+
+        result.onTimeout(() -> { // catch
+            println("执行超时");
+        });
+
+        return result;
+    }
+
+    @GetMapping("/completion-stage")
+    public CompletionStage<String> completionStage() {
+
+        final long startTime = System.currentTimeMillis();
+
+        println("HelloWorld");
+
+        return CompletableFuture.supplyAsync(()->{
+            long constTime = System.currentTimeMillis() - startTime;
+            println("执行计算结果，消耗：" + constTime + "ms");
+            return "helloWorld"; // 异步执行结果
+        });
+
+    }
+
+    @GetMapping("/callable-hello-world")
+    public Callable<String> callableHelloWorld() {
+        final long startTime = System.currentTimeMillis();
+
+        println("HelloWorld");
+
+        return () -> {
+            long constTime = System.currentTimeMillis() - startTime;
+            println("执行计算结果，消耗：" + constTime + "ms");
+            return "helloWorld";
+        };
+    }
+
+    private static void println(Object object) {
+        String threadName = Thread.currentThread().getName();
+        System.out.println("HelloWorldAsyncController[" + threadName + "] ： " + object);
+    }
+}
